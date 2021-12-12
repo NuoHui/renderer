@@ -404,7 +404,7 @@ module.exports = CustomRenderer
 
 
 
-可能你也发现我们设置`isAsync`为false，这个参数是用来控制fiber node的工作模式。设置为false标识禁用AsyncMode模式。
+可能你也发现我们设置`isAsync`为false，这个参数是用来控制`fiber node`的工作模式。设置为false标识禁用AsyncMode模式。
 
 重新启动项目：
 
@@ -665,7 +665,7 @@ function (rootContainerInstance: Container): HostContext {
 
 参数：
 
-	- rootContainerInstance就是我们在render时候指定的根dom节点，这里指的是`<div id="root"></div>`。
+- rootContainerInstance就是我们在render时候指定的根dom节点，这里指的是`<div id="root"></div>`。
 
 返回值：
 
@@ -741,7 +741,7 @@ function getChildHostContext(
 
 
 
-### shouldSetTextConten
+### shouldSetTextContent
 
 这个函数的签名如下：
 
