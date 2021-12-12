@@ -1,17 +1,30 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
-import './index.css';
-import App from './App';
-import reportWebVitals from './reportWebVitals';
+import React from 'react'
+// import ReactDOM from "react-dom";
+import CustomRenderer from './renderer'
 
-ReactDOM.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-  document.getElementById('root')
-);
+const Text = props => {
+  return <p className={props.className}>{props.content}</p>
+}
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
+class App extends React.Component {
+  state = {
+    text: Date.now(),
+  }
+  onButtonClick = () => {
+    this.setState(() => ({ text: Date.now() }))
+  }
+  render() {
+    return (
+      <div>
+        <Text className="hello-class" content={this.state.text} />
+        <span style="color:blue;" autofocus>
+          World
+        </span>
+        <button onClick={this.onButtonClick}>Get current time</button>
+      </div>
+    )
+  }
+}
+
+// ReactDOM.render(<App />, document.getElementById("root"));
+CustomRenderer.render(<App />, document.getElementById('root'))
