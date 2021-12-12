@@ -1,8 +1,25 @@
+原文链接：
+- https://blog.atulr.com/react-custom-renderer-1/
+- https://blog.atulr.com/react-custom-renderer-2/
+- https://blog.atulr.com/react-custom-renderer-3/
+
+`React` 帮助您以声明方式编写 `UI`。更多关于声明式与命令式的信息在[这里](https://codeburst.io/declarative-vs-imperative-programming-a8a7c93d9ad2)。`React`最初是为 `Web` 开发设计的，但到目前为止，它已扩展为 `React Native`、`React Canvas`、`Redocx`、`React PDF` 甚至 `React Hardware`。
 
 
-## React架构
 
-React架构主要包括三部分：
+如果你想了解更多自定义渲染器，可以查阅该[列表](https://github.com/chentsulin/awesome-react-renderer)。
+
+
+
+我一直想了解这些渲染器是如何工作的，在这篇文章中，我将详细探讨 React 渲染器。 Ken Wheeler 在 React 阿姆斯特丹 2017 上的演讲之一激发了我的兴趣。
+
+<iframe width="910" height="512" src="https://www.youtube.com/embed/oPofnLZZTwQ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+这篇文章的大部分内容是作者对 `React` 进行实验并阅读多个 `React` 渲染器代码库和博客文章的结果。
+
+## ⚛️ React Core, Reconciler and Renderer
+
+[React仓库](https://reactjs.org/docs/codebase-overview.html)主要包括三部分：
 
 ### React Core
 
@@ -14,26 +31,219 @@ React架构主要包括三部分：
 - React.Children
 - React.PropTypes
 
-
+它不包括具体的`diff`算法或任何特定于平台的代码。
 
 ### Renderer
 
-React 最初是为 DOM(浏览器) 创建的，但后来经过调整，也支持使用 React Native 的原生平台。这将“渲染器”的概念引入到 React 内部。渲染器管理 React 树如何变成底层平台调用。
+`React` 最初是为 `DOM(浏览器)` 创建的，但后来经过演变，也支持 `React Native` 的原生平台使用。这将`“渲染器renderers”`的概念引入到 `React` 内部。渲染器管理 `React Tree`如何变成底层平台调用。
 
 ![img](https://note-assets-1257150743.cos.ap-guangzhou.myqcloud.com/img/common-reconciler.png)
 
 
 
-### React DOM 或者 React Native
+联想最近在看的`remax`源码，其内部就是通过`Reconciler`实现了一个运行时`@remax/runtime`，以及各个平台的`View API`。后面会详情介绍`remax`相关源码介绍。
 
-平台或者说宿主。这里补充两个概念：
+
+
+### Reconciler
+
+React 最初只是服务于 DOM，但是这之后被改编成也能同时支持原生平台的 [React Native](https://reactnative.dev/)。因此，在 React 内部机制中引入了“渲染器”这个概念。
+
+**渲染器用于管理一棵 React 树，使其根据底层平台进行不同的调用。**
+
+渲染器同样位于 [`packages/`](https://github.com/facebook/react/tree/main/packages/) 目录下：
+
+- [React DOM Renderer](https://github.com/facebook/react/tree/main/packages/react-dom) 将 React 组件渲染成 DOM。它实现了全局 [`ReactDOM`API](https://zh-hans.reactjs.org/docs/react-dom.html)，这在npm上作为 [`react-dom`](https://www.npmjs.com/package/react-dom) 包。这也可以作为单独浏览器版本使用，称为 `react-dom.js`，导出一个 `ReactDOM` 的全局对象.
+- [React Native Renderer](https://github.com/facebook/react/tree/main/packages/react-native-renderer) 将 React 组件渲染为 Native 视图。此渲染器在 React Native 内部使用。
+
+
+
+即便 `React DOM` 和 `React Native` 渲染器的区别很大，但也需要共享一些逻辑。特别是[协调](https://zh-hans.reactjs.org/docs/reconciliation.html)算法需要尽可能相似，这样可以让声明式渲染，自定义组件，state，生命周期方法和 refs 等特性，保持跨平台工作一致。
+
+为了解决这个问题，不同的渲染器彼此共享一些代码。我们称 React 的这一部分为 “reconciler”。当处理类似于 `setState()` 这样的更新时，reconciler 会调用树中组件上的 `render()`，然后决定是否进行挂载，更新或是卸载操作。
+
+
+
+#### stack reconciler
+
+“stack” reconciler 是 React 15 及更早的解决方案。虽然我们已经停止了对它的使用, 但是在[这里](https://zh-hans.reactjs.org/docs/implementation-notes.html)有详细的文档。
+
+
+
+### Fiber reconciler
+
+“fiber” reconciler 是一个新尝试，致力于解决 stack reconciler 中固有的问题，同时解决一些历史遗留问题。Fiber 从 React 16 开始变成了默认的 reconciler。
+
+它的主要目标是：
+
+- 能够把可中断的任务切片处理。
+- 能够调整优先级，重置并复用任务。
+- 能够在父元素与子元素之间交错处理，以支持 React 中的布局。
+- 能够在 `render()` 中返回多个元素。
+- 更好地支持错误边界。
+
+你可以在[这里](https://github.com/acdlite/react-fiber-architecture)和[这里](https://medium.com/react-in-depth/inside-fiber-in-depth-overview-of-the-new-reconciliation-algorithm-in-react-e1c04700ef6e)，深入了解 React Fiber 架构。虽然这已经在 React 16 中启用了，但是 async 特性还没有默认开启。
+
+源代码在 [`packages/react-reconciler`](https://github.com/facebook/react/tree/main/packages/react-reconciler) 目录下。
+
+推荐阅读：
+
+- To know more about fiber [you can watch the Cartoon intro to Fiber by Lin Clark](https://www.youtube.com/watch?v=ZCuYPiUIONs)
+
+- To know more about **Async rendering**:
+  - **Time slicing & Suspense**: https://www.youtube.com/watch?v=nLF0n9SACd4 and https://youtu.be/6g3g0Q_XVb4?t=1659 talks by Dan Abramov.
+
+
+
+## 🕵🏻‍ Components, Instances, Elements and Fiber
+
+假设我们有一个如下所示的 React 应用程序：
+
+```react
+import React from 'react'
+import ReactDom from 'react-dom'
+
+class MyButton extends React.Component {
+  state = { text: 'click me' }
+  onBtnClick = () => {
+    this.setState(() => ({ text: 'I was clicked' }))
+  }
+  render() {
+    return <button onClick={this.onBtnClick}> {this.state.text} </button>
+  }
+}
+
+const Content = props => <p>{props.text}</p>
+
+const App = () => {
+  return (
+    <div>
+      <p style="padding:20px">Hello World</p>
+      <Content text="hello world" />
+      <MyButton />
+    </div>
+  )
+}
+
+ReactDom.render(<App />, document.getElementById('root'))
+```
+
+### Component
+
+在上面的示例中：`MyButton`、`Content` 和 `App` 本质上是您定义的组件。组件可以定义为类（`MyButton`）或函数（`Content` `App`）。它基本上是对 UI 元素的外观和行为方式的声明。
+
+站在渲染器的角度，有两种类型的`React`组件：
 
 - **Host Components**: 指的是运行于特定平台的组件，比如`<div>`,`<View>`。
 - **Composite Components**: 复合组件指的是用户自定义的组件。比如`<MyButton>` or `<Content>`。
 
 
 
-## 自定义渲染器
+### Instances
+
+对于声明为类的组件，实例是组件在内存中的实例化后的版本。或者你也可以理解实例指的就是你在编程中使用的`this`。它对于存储本地状态和响应生命周期事件非常有用。同一个组件可以有多个独立的实例。我们永远不会手动创建这些实例，它们将由 React 管理。此外，函数组件没有实例。
+
+
+
+### Elements
+
+元素是描述组件实例或 DOM 节点及其所需属性的不可变纯对象。组件的渲染函数返回一个元素。在函数组件的情况下。输入是`props`，而输出是`React元素`。由于元素只是简单的 JS 对象，因此它们很容易遍历并且不需要解析。
+
+我们可以简单看一个例子：
+
+```react
+const Content = props => {
+  return <p style={props.style}>{props.text}</p>
+}
+```
+
+我们再看看我们是怎么调用的。
+
+```react
+<Content style="background:blue;" text="hello world" />
+```
+
+我们通过`console`看看React是如何执行这个函数组件的，观察它的输出。
+
+```javascript
+const props = { text: 'hello world', style: 'background:blue;' };
+console.log(Content(props))
+// This logs
+{
+  "type":"p",
+  "props":{
+    "style":"background:blue;",
+    "children":"hello world"
+  },
+}
+```
+
+这是一个组件的React元素。它仅包含有关组件类型 `p` 及其`props`（样式、子项）的信息。换句话说，它是一个轻量级的 javascript 对象，只包含在屏幕上绘制元素所需的信息。
+
+同理，我们看下面的`App`组件。
+
+```javascript
+const App = () => {
+  return (
+    <div>
+      <p style="padding:20px">Hello World</p>
+      <Content text="hello world" />
+      <MyButton />
+    </div>
+  )
+}
+console.log(App())
+// This would log
+{
+   "type": "div",
+   "props": {
+      "children":[
+         {
+            "type":"p",
+            "props":{
+               "style":"padding:20px",
+               "children":"Hello World"
+            },
+         },
+         {
+           "type": ƒ Content(props),
+           "props": {"text":"hello world"},
+         },
+         {
+           "type": ƒ MyButton()
+         },
+      ]
+   },
+}
+```
+
+如果您仔细观察，第二个和第三个孩子节点的类型不是字符串。它们是函数（实质上是组件）。现在，react reconciler 会在那些类型不是字符串的child节点上调用render。这将递归地发生，直到 react 可以将所有类型解析为字符串。因此，如果一个 react 元素类型是一个字符串，它就是一个 dom 元素，否则它就是一个组件。
+
+
+
+这里推荐阅读：Dan Abramov here: https://reactjs.org/blog/2015/12/18/react-components-elements-and-instances.html。
+
+
+
+### fiber
+
+这是在新的 React Fiber Reconciler 中引入的。fiber是一个 JavaScript 对象，其中包含有关组件及其输入和输出的信息。它与实例具有一对一的关系。它管理实例的工作。
+
+fiber使用属性 stateNode 跟踪实例。它也有关于它与其他实例的关系的信息。在任何时候，一个组件实例最多有两个与之对应的fiber：the current (flushed fiber or rendered fiber) and the work-in-progress fiber。一个fiber节点看起来像这样
+
+```javascript
+{
+  child, stateNode, siblings, alternate, return, type, key
+}
+```
+
+从[源码](https://github.com/facebook/react/blob/9ea4bc6ed607b0bbd2cff7bbdd4608db99490a5f/packages/react-reconciler/src/ReactFiber.js#L406)我们可以理解 React Fiber reconciler 使用 react 元素为组件实例生成 React Fiber。关于fiber推荐阅读[You can find more details about the fiber here](https://giamir.com/what-is-react-fiber)。
+
+现在我们已经完成前置知识的学习了，可以进入主题啦。
+
+![brace yourselves](https://note-assets-1257150743.cos.ap-guangzhou.myqcloud.com/img/brace-yourself-meme.png)
+
+## 👷🏻‍ Lets build a custom rendere
 
 ### 创建模板项目
 
@@ -44,7 +254,7 @@ cd renderer
 
 ### 项目结构骨架
 
-```
+```text
 ├── README.md
 ├── package.json
 ├── node_modules
